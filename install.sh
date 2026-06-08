@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # - Developer Identity
-DEV="@LAXXYPLAYZZ"
-FOOTER="@DRX_POWER"
+DEV="@OWNERHIMANSHU"
+FOOTER="@OWNERHIMANSHU"
 
 # Colors
 CYAN='\033[1;36m'
