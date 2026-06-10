@@ -2,39 +2,46 @@ name: Auto Restart and Keep Codespace Active
 
 on:
   schedule:
-    - cron: '*/1 * * * *'
+    - cron: '*/1 * * * *'   # every 10 minutes
+
+permissions:
+  contents: read
+  codespaces: write   # required to manage codespaces
 
 jobs:
-  restart_codespace:
+  keep-codespace-alive:
     runs-on: ubuntu-latest
-
     steps:
       - name: Install GitHub CLI
-        run: |
-          sudo apt-get update && sudo apt-get install -y gh jq
+        run: sudo apt-get update && sudo apt-get install -y gh jq
 
-      - name: Authenticate GitHub CLI with GITHUB_TOKEN
+      - name: Authenticate with GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check Codespace Status and Keep Alive
+      - name: Keep Codespace Alive
         run: |
           CODESPACE_NAME="legendary-space-journey-xr5xq965qrp939vr5"
-          
-          STATUS=$(gh codespace list --json name,state | jq -r --arg name "$CODESPACE_NAME" '.[] | select(.name==$name) | .state')
-          
+
+          # List all codespaces and filter by name
+          STATUS=$(gh codespace list --json name,state -q ".[] | select(.name==\"$CODESPACE_NAME\") | .state")
+
           if [ -z "$STATUS" ]; then
-            echo "Error: Codespace not found or unable to fetch status."
+            echo "Codespace '$CODESPACE_NAME' not found or inaccessible."
+            echo "Check that the name is correct and the token has codespace permissions."
             exit 1
           fi
-          
-          echo "Codespace status: $STATUS"
-          
-          if [ "$STATUS" == "Shutdown" ]; then
-            echo "Codespace is offline. Attempting to start it via SSH..."
-            gh codespace ssh --codespace "$CODESPACE_NAME" -- echo "Codespace started"
+
+          echo "Current state: $STATUS"
+
+          if [ "$STATUS" == "Shutdown" ] || [ "$STATUS" == "Offline" ]; then
+            echo "Starting codespace..."
+            gh codespace start --codespace "$CODESPACE_NAME"
+          elif [ "$STATUS" == "Available" ] || [ "$STATUS" == "Active" ]; then
+            echo "Codespace is running. Sending keep-alive signal..."
+            # Execute a no‑op command to reset the inactivity timer
+            gh codespace exec --codespace "$CODESPACE_NAME" -- echo "keep-alive"
           else
-            echo "Codespace is active. Sending keep-alive signal..."
-            gh codespace ssh --codespace "$CODESPACE_NAME" -- echo "Keep-alive signal triggered"
+            echo "Unknown state: $STATUS"
           fi
